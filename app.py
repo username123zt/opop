@@ -10,7 +10,9 @@ app = Flask(__name__)
 app.secret_key = os.environ.get('SECRET_KEY', os.urandom(32).hex())
 
 BOT_TOKEN = os.environ.get('BOT_TOKEN', '')
-DB_PATH = os.environ.get('DB_PATH', 'bot.db')
+DB_PATH = os.environ.get('DB_PATH', '')
+if not DB_PATH or '://' in DB_PATH:
+    DB_PATH = 'bot.db'
 ADMIN_SECRET = os.environ.get('ADMIN_SECRET', 'ADMIN2024')
 ADMIN_IDS = set(int(i) for i in os.environ.get('ADMIN_IDS', '').split(',') if i.strip().isdigit())
 POLL_INTERVAL = 1
@@ -467,7 +469,14 @@ def get_db():
     return conn
 
 def init_db():
-    conn = get_db()
+    global DB_PATH
+    try:
+        conn = sqlite3.connect(DB_PATH, timeout=30)
+    except Exception as e:
+        print("DB PATH ERROR:", e, "- falling back to bot.db in current dir")
+        DB_PATH = 'bot.db'
+        conn = sqlite3.connect(DB_PATH, timeout=30)
+    conn.row_factory = sqlite3.Row
     conn.executescript('''
         CREATE TABLE IF NOT EXISTS users (
             id INTEGER PRIMARY KEY,
@@ -558,6 +567,10 @@ def is_admin_user(uid):
 @app.route('/')
 def index():
     return html_page, 200, {'Content-Type': 'text/html; charset=utf-8'}
+
+@app.route('/healthz')
+def healthz():
+    return jsonify({'status': 'ok', 'db': DB_PATH})
 
 @app.route('/api/init', methods=['POST'])
 def api_init():
@@ -787,10 +800,13 @@ def bot_poll():
             time.sleep(2)
         time.sleep(POLL_INTERVAL)
 
+print("Starting CryptoArb, DB_PATH =", DB_PATH, "BOT_TOKEN set:", bool(BOT_TOKEN))
 init_db()
+print("DB ready")
 
 if BOT_TOKEN:
     threading.Thread(target=bot_poll, daemon=True).start()
+    print("Bot polling started")
 
 if __name__ == '__main__':
     port = int(os.environ.get('PORT', 5000))
