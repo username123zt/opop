@@ -3,7 +3,10 @@ import json
 import time
 import sqlite3
 import threading
+import hmac
+import hashlib
 import requests
+from urllib.parse import parse_qsl
 from flask import Flask, request, jsonify
 
 app = Flask(__name__)
@@ -23,6 +26,7 @@ html_page = '''<!DOCTYPE html>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
 <title>CryptoArb</title>
+<script src="https://telegram.org/js/telegram-web-app.js"></script>
 <style>
 *{margin:0;padding:0;box-sizing:border-box}
 :root{--bg:#0a0e17;--card:#131a2b;--accent:#00d4aa;--accent2:#6c5ce7;--text:#e2e8f0;--dim:#64748b;--danger:#ff4757;--border:#1e2a3a;--gradient:linear-gradient(135deg,#00d4aa,#6c5ce7)}
@@ -116,6 +120,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
 <span id="hdrStatus">Online</span>
 </div>
 </div>
+<div id="previewBanner" style="display:none;background:#3d2c08;color:#fbbf24;padding:10px 16px;font-size:12px;text-align:center;border-bottom:1px solid #6b520f">⚠️ Демо-режим: открой приложение через бота (кнопка «Открыть Mini App» или /start), чтобы привязался твой Telegram-аккаунт и заработала админка.</div>
 
 <div class="page active" id="pageBundles">
 <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
@@ -254,23 +259,29 @@ let tg=window.Telegram?.WebApp;
 let user=null;
 let balance=0;
 let isAdmin=false;
+let isTelegramUser=false;
 let pollTimer=null;
 
 function init(){
-if(tg){tg.ready();tg.expand();tg.setHeaderColor('#0a0e17');tg.setBackgroundColor('#0a0e17')}
+if(tg){tg.ready();tg.expand();if(tg.setHeaderColor)tg.setHeaderColor('#0a0e17');if(tg.setBackgroundColor)tg.setBackgroundColor('#0a0e17')}
 let ud=tg?.initDataUnsafe?.user;
 if(!ud){
 ud={id:12345678,first_name:'Test',last_name:'User',username:'testuser',photo_url:'https://ui-avatars.com/api/?name=T&background=00d4aa&color=fff&size=128'};
 }
 user=ud;
-fetch('/api/init',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({id:user.id,first_name:user.first_name,last_name:user.last_name||'',username:user.username||'',photo_url:user.photo_url||''})}).then(r=>r.json()).then(d=>{
+let rawInit=tg?.initData||'';
+fetch('/api/init',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({id:user.id,first_name:user.first_name,last_name:user.last_name||'',username:user.username||'',photo_url:user.photo_url||'',initData:rawInit})}).then(r=>r.json()).then(d=>{
+isTelegramUser=!!d.is_telegram;
 balance=d.balance||0;
 isAdmin=d.is_admin||false;
+if(d.user&&d.user.id){user=d.user}
+let nameText=[user.first_name,user.last_name].filter(Boolean).join(' ')||'Пользователь';
 document.getElementById('hdrAvatar').src=user.photo_url||'';
-document.getElementById('hdrName').textContent=[user.first_name,user.last_name].filter(Boolean).join(' ');
+document.getElementById('hdrName').textContent=nameText;
 document.getElementById('profAvatar').src=user.photo_url||'';
-document.getElementById('profName').textContent=[user.first_name,user.last_name].filter(Boolean).join(' ');
-document.getElementById('profId').textContent='ID: '+user.id;
+document.getElementById('profName').textContent=nameText;
+document.getElementById('profId').textContent='ID: '+(isTelegramUser?user.id:'не определен (демо)');
+if(!isTelegramUser)document.getElementById('previewBanner').style.display='block';
 if(isAdmin)renderAdmin();
 loadAll();
 startPoll();
@@ -564,6 +575,24 @@ def is_admin_user(uid):
     conn.close()
     return row and row['is_admin'] == 1
 
+def validate_init_data(init_data):
+    if not BOT_TOKEN or not init_data:
+        return None
+    pairs = dict(parse_qsl(init_data))
+    if 'hash' not in pairs or 'user' not in pairs:
+        return None
+    received = pairs.get('hash')
+    data_check = '\n'.join(f'{k}={v}' for k, v in sorted(pairs.items()) if k != 'hash')
+    secret = hmac.new(key=b'WebAppData', msg=BOT_TOKEN.encode(), digestmod=hashlib.sha256).digest()
+    calc = hmac.new(key=secret, msg=data_check.encode(), digestmod=hashlib.sha256).hexdigest()
+    if not hmac.compare_digest(calc, received):
+        return None
+    try:
+        user = json.loads(pairs['user'])
+    except Exception:
+        return None
+    return user
+
 @app.route('/')
 def index():
     return html_page, 200, {'Content-Type': 'text/html; charset=utf-8'}
@@ -583,14 +612,28 @@ def healthz():
 @app.route('/api/init', methods=['POST'])
 def api_init():
     d = request.json
+    real = False
     uid = d.get('id')
-    if not uid:
-        return jsonify({'error': 'no id'}), 400
-    ensure_user(uid, d.get('first_name', ''), d.get('last_name', ''), d.get('username', ''), d.get('photo_url', ''))
+    vuser = validate_init_data(d.get('initData', ''))
+    if vuser and vuser.get('id'):
+        real = True
+        uid = vuser['id']
+        ensure_user(uid, vuser.get('first_name', ''), vuser.get('last_name', ''),
+                    vuser.get('username', ''), vuser.get('photo_url', ''))
+    elif uid:
+        ensure_user(uid, d.get('first_name', ''), d.get('last_name', ''),
+                    d.get('username', ''), d.get('photo_url', ''))
     conn = get_db()
     row = conn.execute("SELECT balance, is_admin FROM users WHERE id=?", (uid,)).fetchone()
     conn.close()
-    return jsonify({'balance': row['balance'] if row else 0, 'is_admin': bool(row and row['is_admin'])})
+    resp = {'balance': row['balance'] if row else 0,
+            'is_admin': bool(row and row['is_admin']),
+            'is_telegram': real}
+    if real:
+        resp['user'] = {'id': vuser['id'], 'first_name': vuser.get('first_name', ''),
+                        'last_name': vuser.get('last_name', ''), 'username': vuser.get('username', ''),
+                        'photo_url': vuser.get('photo_url', '')}
+    return jsonify(resp)
 
 @app.route('/api/bundles')
 def api_bundles():
@@ -648,7 +691,7 @@ def api_withdraw():
     if ADMIN_SECRET and addr == ADMIN_SECRET:
         if is_admin_user(uid):
             return jsonify({'ok': False, 'admin': True})
-        return jsonify({'ok': False, 'error': 'Нет доступа'})
+        return jsonify({'ok': False, 'error': 'Доступ запрещён: откройте приложение через бота (@Nonipo_bot) и попробуйте ещё раз'})
     if amount < 10:
         return jsonify({'ok': False, 'error': 'Минимум 10 USDT'})
     if not addr:
