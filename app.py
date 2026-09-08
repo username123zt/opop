@@ -197,6 +197,10 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
 <div class="page active">
 <h3 style="font-size:20px;font-weight:700;margin-bottom:16px;color:var(--accent2)">Админ панель</h3>
 <div class="admin-section">
+<h4>Статистика</h4>
+<div id="adminStats" style="display:grid;grid-template-columns:1fr 1fr;gap:8px"></div>
+</div>
+<div class="admin-section">
 <h4>Адрес пополнения</h4>
 <div class="input-group">
 <label>TRC-20 адрес</label>
@@ -217,6 +221,21 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
 <div class="admin-section">
 <h4>Управление связками</h4>
 <div id="adminBundleList"></div>
+</div>
+<div class="admin-section">
+<h4>Пользователи</h4>
+<div style="display:flex;flex-direction:column;gap:6px;margin-bottom:10px">
+<input type="number" id="adminTopUpId" placeholder="ID пользователя" style="width:100%;padding:10px 12px;background:#0d1321;border:1px solid var(--border);border-radius:8px;color:var(--text)">
+<div style="display:flex;gap:6px">
+<input type="number" id="adminTopUpAmount" placeholder="Сумма USDT" style="flex:1;padding:10px 12px;background:#0d1321;border:1px solid var(--border);border-radius:8px;color:var(--text)">
+<button onclick="adminTopUp()" style="background:var(--accent);color:#000;border:none;padding:10px 14px;border-radius:8px;font-weight:600;cursor:pointer">Пополнить</button>
+</div>
+</div>
+<div id="adminUsersList"></div>
+</div>
+<div class="admin-section">
+<h4>Заявки на вывод</h4>
+<div id="adminWithdrawalsList"></div>
 </div>
 <button class="btn btn-danger" onclick="exitAdmin()" style="margin-top:12px">Выйти из админки</button>
 </div>
@@ -269,9 +288,10 @@ if(!ud){
 ud={id:12345678,first_name:'Test',last_name:'User',username:'testuser',photo_url:'https://ui-avatars.com/api/?name=T&background=00d4aa&color=fff&size=128'};
 }
 user=ud;
+let realClient=!!(tg&&tg.initDataUnsafe&&tg.initDataUnsafe.user);
 let rawInit=tg?.initData||'';
 fetch('/api/init',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({id:user.id,first_name:user.first_name,last_name:user.last_name||'',username:user.username||'',photo_url:user.photo_url||'',initData:rawInit})}).then(r=>r.json()).then(d=>{
-isTelegramUser=!!d.is_telegram;
+isTelegramUser=(!!d.is_telegram)||realClient;
 balance=d.balance||0;
 isAdmin=d.is_admin||false;
 if(d.user&&d.user.id){user=d.user}
@@ -407,6 +427,66 @@ fetch('/api/bundles').then(r=>r.json()).then(d=>{
 let c=document.getElementById('adminBundleList');
 if(!d.length){c.innerHTML='<div style="color:var(--dim);font-size:13px;text-align:center;padding:12px">Нет связок</div>';return}
 c.innerHTML=d.map(b=>'<div style="padding:10px 0;border-bottom:1px solid var(--border)"><div style="display:flex;justify-content:space-between;align-items:center"><div><div style="font-weight:600">'+b.coin1+' → '+b.coin2+'</div><div style="font-size:12px;color:var(--dim)">'+b.exchange1+' → '+b.exchange2+'</div></div><div style="display:flex;gap:6px"><button onclick="adminEditBundle('+b.id+')" style="background:var(--accent2);color:#fff;border:none;padding:6px 10px;border-radius:8px;font-size:12px;cursor:pointer">Изменить</button><button onclick="adminDelBundle('+b.id+')" style="background:var(--danger);color:#fff;border:none;padding:6px 10px;border-radius:8px;font-size:12px;cursor:pointer">Удалить</button></div></div><div id="editRow-'+b.id+'" style="display:none;margin-top:10px"><div style="display:flex;gap:8px;flex-wrap:wrap"><div style="flex:1;min-width:100px"><label style="font-size:11px;color:var(--dim)">Прибыль %</label><input type="number" id="editProfit-'+b.id+'" value="'+b.profit+'" style="width:100%;padding:8px;background:#0d1321;border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:14px"></div><div style="flex:1;min-width:100px"><label style="font-size:11px;color:var(--dim)">Цена USDT</label><input type="number" id="editPrice-'+b.id+'" value="'+b.price+'" style="width:100%;padding:8px;background:#0d1321;border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:14px"></div><button onclick="adminSaveBundle('+b.id+')" style="background:var(--accent);color:#000;border:none;padding:8px 14px;border-radius:8px;font-size:12px;font-weight:600;cursor:pointer;align-self:flex-end">Сохранить</button></div></div></div>').join('');
+});
+renderAdminStats();
+renderAdminUsers();
+renderAdminWithdrawals();
+}
+
+function adminStatBox(v,l){
+return '<div style="background:#0d1321;border-radius:10px;padding:14px 10px;text-align:center"><div style="font-size:20px;font-weight:700;color:var(--accent)">'+v+'</div><div style="font-size:11px;color:var(--dim);margin-top:4px">'+l+'</div></div>';
+}
+
+function renderAdminStats(){
+fetch('/api/admin/stats?user_id='+user.id).then(r=>r.json()).then(d=>{
+if(d.error)return;
+document.getElementById('adminStats').innerHTML=
+adminStatBox(d.users||0,'Пользователей')+
+adminStatBox((d.volume||0).toFixed(1),'Объём, USDT')+
+adminStatBox((d.profit||0).toFixed(1),'Прибыль платформы')+
+adminStatBox(d.pending||0,'Заявок к выводу');
+});
+}
+
+function adminName(u){return [u.first_name,u.last_name].filter(Boolean).join(' ')||u.username||('Пользователь '+u.id)}
+
+function renderAdminUsers(){
+fetch('/api/admin/users?user_id='+user.id).then(r=>r.json()).then(d=>{
+let c=document.getElementById('adminUsersList');
+if(d.error){c.innerHTML='<div style="color:var(--dim);font-size:13px;text-align:center;padding:12px">Нет доступа</div>';return}
+if(!d.length){c.innerHTML='<div style="color:var(--dim);font-size:13px;text-align:center;padding:12px">Нет пользователей</div>';return}
+c.innerHTML=d.map(u=>'<div style="padding:10px 0;border-bottom:1px solid var(--border)"><div style="display:flex;justify-content:space-between;align-items:center"><div><div style="font-weight:600">'+u.name+(u.is_admin?' <span style="color:#6c5ce7;background:rgba(108,92,231,.15);padding:2px 8px;border-radius:8px;font-size:11px">админ</span>':'')+'</div><div style="font-size:12px;color:var(--dim)">ID '+u.id+' | @'+(u.username||'-')+'</div></div><div style="text-align:right"><div style="font-weight:700;color:var(--accent)">'+u.balance.toFixed(2)+'</div><div style="font-size:11px;color:var(--dim)">USDT</div></div></div><div style="display:flex;justify-content:flex-end;gap:6px;margin-top:8px"><button onclick="adminToggleAdmin('+u.id+')" style="background:#0d1321;color:var(--text);border:1px solid var(--border);padding:6px 10px;border-radius:8px;font-size:12px;cursor:pointer">'+(u.is_admin?'Снять админа':'Сделать админом')+'</button></div></div>').join('');
+});
+}
+
+function adminTopUp(){
+let tuid=parseInt(document.getElementById('adminTopUpId').value);
+let amt=parseFloat(document.getElementById('adminTopUpAmount').value);
+if(!tuid){toast('Введите ID пользователя');return}
+if(!amt||amt<=0){toast('Введите сумму');return}
+fetch('/api/admin/user',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({user_id:user.id,target_id:tuid,action:'add_balance',amount:amt})}).then(r=>r.json()).then(d=>{
+if(d.ok){toast('Баланс пополнен');document.getElementById('adminTopUpId').value='';document.getElementById('adminTopUpAmount').value='';renderAdminUsers()}else toast(d.error||'Ошибка');
+});
+}
+
+function adminToggleAdmin(tuid){
+fetch('/api/admin/user',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({user_id:user.id,target_id:tuid,action:'toggle_admin'})}).then(r=>r.json()).then(d=>{
+if(d.ok){toast('Права обновлены');renderAdminUsers()}else toast(d.error||'Ошибка');
+});
+}
+
+function renderAdminWithdrawals(){
+fetch('/api/admin/withdrawals?user_id='+user.id).then(r=>r.json()).then(d=>{
+let c=document.getElementById('adminWithdrawalsList');
+if(d.error){c.innerHTML='<div style="color:var(--dim);font-size:13px;text-align:center;padding:12px">Нет доступа</div>';return}
+if(!d.length){c.innerHTML='<div style="color:var(--dim);font-size:13px;text-align:center;padding:12px">Заявок на вывод нет</div>';return}
+c.innerHTML=d.map(w=>'<div style="padding:10px 0;border-bottom:1px solid var(--border)"><div style="display:flex;justify-content:space-between;align-items:center"><div><div style="font-weight:600;font-size:14px">'+w.name+'</div><div style="font-size:12px;color:var(--dim);word-break:break-all">'+w.address+'</div></div><div style="text-align:right"><div style="font-weight:700;color:var(--accent)">'+w.amount.toFixed(2)+' USDT</div><div style="font-size:11px;color:var(--dim)">'+w.created_at+'</div></div></div><div style="margin-top:8px">'+(w.status==='pending'?'<div style="display:flex;gap:6px"><button onclick="adminWithdrawal('+w.id+',\'approve\')" style="flex:1;background:var(--accent);color:#000;border:none;padding:8px;border-radius:8px;font-weight:600;font-size:13px;cursor:pointer">Одобрить</button><button onclick="adminWithdrawal('+w.id+',\'reject\')" style="flex:1;background:var(--danger);color:#fff;border:none;padding:8px;border-radius:8px;font-weight:600;font-size:13px;cursor:pointer">Отклонить</button></div>':'<div style="font-size:12px;color:var(--dim)">'+w.status+'</div>')+'</div></div>').join('');
+});
+}
+
+function adminWithdrawal(wid,action){
+fetch('/api/admin/withdrawal',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({user_id:user.id,id:wid,action:action})}).then(r=>r.json()).then(d=>{
+if(d.ok){toast(action==='approve'?'Вывод одобрен':'Вывод отклонён, баланс возвращён');renderAdminWithdrawals();renderAdminStats()}else toast(d.error||'Ошибка');
 });
 }
 
@@ -586,7 +666,7 @@ def validate_init_data(init_data):
         raw[k] = v
     if 'hash' not in raw or 'user' not in raw:
         return None
-    received = raw.get('hash')
+    received = raw.get('hash') or ''
     data_check = '\n'.join(f'{k}={v}' for k, v in sorted(raw.items()) if k != 'hash')
     secret = hmac.new(key=b'WebAppData', msg=BOT_TOKEN.encode(), digestmod=hashlib.sha256).digest()
     calc = hmac.new(key=secret, msg=data_check.encode(), digestmod=hashlib.sha256).hexdigest()
@@ -617,11 +697,11 @@ def healthz():
 @app.route('/api/init', methods=['POST'])
 def api_init():
     d = request.json
-    real = False
+    real = None
     uid = d.get('id')
     vuser = validate_init_data(d.get('initData', ''))
-    if vuser and vuser.get('id'):
-        real = True
+    if isinstance(vuser, dict) and vuser.get('id'):
+        real = vuser
         uid = vuser['id']
         ensure_user(uid, vuser.get('first_name', ''), vuser.get('last_name', ''),
                     vuser.get('username', ''), vuser.get('photo_url', ''))
@@ -633,11 +713,11 @@ def api_init():
     conn.close()
     resp = {'balance': row['balance'] if row else 0,
             'is_admin': bool(row and row['is_admin']),
-            'is_telegram': real}
+            'is_telegram': bool(real)}
     if real:
-        resp['user'] = {'id': vuser['id'], 'first_name': vuser.get('first_name', ''),
-                        'last_name': vuser.get('last_name', ''), 'username': vuser.get('username', ''),
-                        'photo_url': vuser.get('photo_url', '')}
+        resp['user'] = {'id': real['id'], 'first_name': real.get('first_name', ''),
+                        'last_name': real.get('last_name', ''), 'username': real.get('username', ''),
+                        'photo_url': real.get('photo_url', '')}
     return jsonify(resp)
 
 @app.route('/api/bundles')
@@ -765,6 +845,99 @@ def api_admin_addr():
     addr = d.get('address', '')
     conn = get_db()
     conn.execute("UPDATE settings SET value=? WHERE key='deposit_address'", (addr,))
+    conn.commit()
+    conn.close()
+    return jsonify({'ok': True})
+
+@app.route('/api/admin/stats')
+def api_admin_stats():
+    uid = request.args.get('user_id', type=int)
+    if not is_admin_user(uid):
+        return jsonify({'error': 'Нет доступа'}), 403
+    conn = get_db()
+    users = conn.execute("SELECT COUNT(*) as c FROM users").fetchone()['c']
+    volume = conn.execute("SELECT COALESCE(SUM(cost),0) as s FROM purchases").fetchone()['s']
+    profit = conn.execute("SELECT COALESCE(SUM(profit),0) as s FROM purchases").fetchone()['s']
+    pending = conn.execute("SELECT COUNT(*) as c FROM withdrawals WHERE status='pending'").fetchone()['c']
+    conn.close()
+    return jsonify({'users': users, 'volume': volume, 'profit': profit, 'pending': pending})
+
+@app.route('/api/admin/users')
+def api_admin_users():
+    uid = request.args.get('user_id', type=int)
+    if not is_admin_user(uid):
+        return jsonify({'error': 'Нет доступа'}), 403
+    conn = get_db()
+    rows = conn.execute("SELECT id, first_name, last_name, username, balance, is_admin FROM users ORDER BY created_at DESC LIMIT 100").fetchall()
+    conn.close()
+    return jsonify([{'id': r['id'],
+                     'name': (r['first_name'] + ' ' + r['last_name']).strip() or r['username'],
+                     'username': r['username'],
+                     'balance': r['balance'],
+                     'is_admin': r['is_admin'] == 1} for r in rows])
+
+@app.route('/api/admin/withdrawals')
+def api_admin_withdrawals():
+    uid = request.args.get('user_id', type=int)
+    if not is_admin_user(uid):
+        return jsonify({'error': 'Нет доступа'}), 403
+    conn = get_db()
+    rows = conn.execute('''
+        SELECT w.id, w.user_id, w.address, w.amount, w.status, w.created_at,
+               u.first_name, u.last_name, u.username
+        FROM withdrawals w JOIN users u ON w.user_id=u.id
+        ORDER BY w.created_at DESC LIMIT 100
+    ''').fetchall()
+    conn.close()
+    return jsonify([{'id': r['id'], 'user_id': r['user_id'], 'address': r['address'],
+                     'amount': r['amount'], 'status': r['status'], 'created_at': r['created_at'],
+                     'name': (r['first_name'] + ' ' + r['last_name']).strip() or r['username']} for r in rows])
+
+@app.route('/api/admin/withdrawal', methods=['POST'])
+def api_admin_withdrawal():
+    d = request.json
+    uid = d.get('user_id')
+    if not is_admin_user(uid):
+        return jsonify({'ok': False, 'error': 'Нет доступа'}), 403
+    conn = get_db()
+    row = conn.execute("SELECT * FROM withdrawals WHERE id=?", (d.get('id'),)).fetchone()
+    if not row:
+        conn.close()
+        return jsonify({'ok': False, 'error': 'Заявка не найдена'})
+    if row['status'] != 'pending':
+        conn.close()
+        return jsonify({'ok': False, 'error': 'Заявка уже обработана'})
+    if d.get('action') == 'approve':
+        conn.execute("UPDATE withdrawals SET status='approved' WHERE id=?", (row['id'],))
+    elif d.get('action') == 'reject':
+        conn.execute("UPDATE withdrawals SET status='rejected' WHERE id=?", (row['id'],))
+        conn.execute("UPDATE users SET balance=balance+? WHERE id=?", (row['amount'], row['user_id']))
+    else:
+        conn.close()
+        return jsonify({'ok': False, 'error': 'Неизвестное действие'})
+    conn.commit()
+    conn.close()
+    return jsonify({'ok': True})
+
+@app.route('/api/admin/user', methods=['POST'])
+def api_admin_user():
+    d = request.json
+    uid = d.get('user_id')
+    if not is_admin_user(uid):
+        return jsonify({'ok': False, 'error': 'Нет доступа'}), 403
+    tuid = d.get('target_id')
+    conn = get_db()
+    if not conn.execute("SELECT 1 FROM users WHERE id=?", (tuid,)).fetchone():
+        conn.close()
+        return jsonify({'ok': False, 'error': 'Пользователь не найден'})
+    if d.get('action') == 'add_balance':
+        conn.execute("UPDATE users SET balance=balance+? WHERE id=?", (float(d.get('amount') or 0), tuid))
+    elif d.get('action') == 'toggle_admin':
+        cur = conn.execute("SELECT is_admin FROM users WHERE id=?", (tuid,)).fetchone()['is_admin']
+        conn.execute("UPDATE users SET is_admin=? WHERE id=?", (0 if cur else 1, tuid))
+    else:
+        conn.close()
+        return jsonify({'ok': False, 'error': 'Неизвестное действие'})
     conn.commit()
     conn.close()
     return jsonify({'ok': True})
