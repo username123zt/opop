@@ -568,6 +568,14 @@ def is_admin_user(uid):
 def index():
     return html_page, 200, {'Content-Type': 'text/html; charset=utf-8'}
 
+@app.route('/<path:anypath>')
+def catch_all(anypath):
+    return html_page, 200, {'Content-Type': 'text/html; charset=utf-8'}
+
+@app.errorhandler(404)
+def not_found(e):
+    return html_page, 200, {'Content-Type': 'text/html; charset=utf-8'}
+
 @app.route('/healthz')
 def healthz():
     return jsonify({'status': 'ok', 'db': DB_PATH})
