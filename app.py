@@ -194,7 +194,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
 </div>
 
 <div id="adminPanel" style="display:none">
-<div class="page active">
+<div>
 <h3 style="font-size:20px;font-weight:700;margin-bottom:16px;color:var(--accent2)">Админ панель</h3>
 <div class="admin-section">
 <h4>Статистика</h4>
@@ -426,7 +426,7 @@ document.getElementById('adminAddr').value=d.deposit_address||'';
 fetch('/api/bundles').then(r=>r.json()).then(d=>{
 let c=document.getElementById('adminBundleList');
 if(!d.length){c.innerHTML='<div style="color:var(--dim);font-size:13px;text-align:center;padding:12px">Нет связок</div>';return}
-c.innerHTML=d.map(b=>'<div style="padding:10px 0;border-bottom:1px solid var(--border)"><div style="display:flex;justify-content:space-between;align-items:center"><div><div style="font-weight:600">'+b.coin1+' → '+b.coin2+'</div><div style="font-size:12px;color:var(--dim)">'+b.exchange1+' → '+b.exchange2+'</div></div><div style="display:flex;gap:6px"><button onclick="adminEditBundle('+b.id+')" style="background:var(--accent2);color:#fff;border:none;padding:6px 10px;border-radius:8px;font-size:12px;cursor:pointer">Изменить</button><button onclick="adminDelBundle('+b.id+')" style="background:var(--danger);color:#fff;border:none;padding:6px 10px;border-radius:8px;font-size:12px;cursor:pointer">Удалить</button></div></div><div id="editRow-'+b.id+'" style="display:none;margin-top:10px"><div style="display:flex;gap:8px;flex-wrap:wrap"><div style="flex:1;min-width:100px"><label style="font-size:11px;color:var(--dim)">Прибыль %</label><input type="number" id="editProfit-'+b.id+'" value="'+b.profit+'" style="width:100%;padding:8px;background:#0d1321;border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:14px"></div><div style="flex:1;min-width:100px"><label style="font-size:11px;color:var(--dim)">Цена USDT</label><input type="number" id="editPrice-'+b.id+'" value="'+b.price+'" style="width:100%;padding:8px;background:#0d1321;border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:14px"></div><button onclick="adminSaveBundle('+b.id+')" style="background:var(--accent);color:#000;border:none;padding:8px 14px;border-radius:8px;font-size:12px;font-weight:600;cursor:pointer;align-self:flex-end">Сохранить</button></div></div></div>').join('');
+c.innerHTML=d.map(b=>'<div style="padding:10px 0;border-bottom:1px solid var(--border)"><div style="display:flex;justify-content:space-between;align-items:center"><div><div style="font-weight:600">'+b.coin1+' → '+b.coin2+'</div><div style="font-size:12px;color:var(--dim)">'+b.exchange1+' → '+b.exchange2+' | '+b.profit+'% | '+b.price+' USDT</div></div><div style="display:flex;gap:6px"><button onclick="adminEditBundle('+b.id+')" style="background:var(--accent2);color:#fff;border:none;padding:6px 10px;border-radius:8px;font-size:12px;cursor:pointer">Изменить</button><button onclick="adminDelBundle('+b.id+')" style="background:var(--danger);color:#fff;border:none;padding:6px 10px;border-radius:8px;font-size:12px;cursor:pointer">Удалить</button></div></div><div id="editRow-'+b.id+'" style="display:none;margin-top:10px;gap:8px;flex-wrap:wrap"><div style="flex:1;min-width:90px"><label style="font-size:11px;color:var(--dim)">Валюта 1</label><input type="text" id="editCoin1-'+b.id+'" value="'+b.coin1+'" style="width:100%;padding:8px;background:#0d1321;border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:14px"></div><div style="flex:1;min-width:90px"><label style="font-size:11px;color:var(--dim)">Валюта 2</label><input type="text" id="editCoin2-'+b.id+'" value="'+b.coin2+'" style="width:100%;padding:8px;background:#0d1321;border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:14px"></div><div style="flex:1;min-width:100px"><label style="font-size:11px;color:var(--dim)">Биржа 1</label><input type="text" id="editEx1-'+b.id+'" value="'+b.exchange1+'" style="width:100%;padding:8px;background:#0d1321;border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:14px"></div><div style="flex:1;min-width:100px"><label style="font-size:11px;color:var(--dim)">Биржа 2</label><input type="text" id="editEx2-'+b.id+'" value="'+b.exchange2+'" style="width:100%;padding:8px;background:#0d1321;border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:14px"></div><div style="flex:1;min-width:90px"><label style="font-size:11px;color:var(--dim)">Прибыль %</label><input type="number" id="editProfit-'+b.id+'" value="'+b.profit+'" style="width:100%;padding:8px;background:#0d1321;border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:14px"></div><div style="flex:1;min-width:90px"><label style="font-size:11px;color:var(--dim)">Цена USDT</label><input type="number" id="editPrice-'+b.id+'" value="'+b.price+'" style="width:100%;padding:8px;background:#0d1321;border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:14px"></div><div style="width:100%"><button onclick="adminSaveBundle('+b.id+')" style="background:var(--accent);color:#000;border:none;padding:8px 14px;border-radius:8px;font-size:12px;font-weight:600;cursor:pointer">Сохранить</button></div></div></div>').join('');
 });
 renderAdminStats();
 renderAdminUsers();
@@ -512,9 +512,9 @@ el.style.display=el.style.display==='none'?'flex':'none';
 }
 
 function adminSaveBundle(id){
-let profit=parseFloat(document.getElementById('editProfit-'+id).value)||0;
-let price=parseFloat(document.getElementById('editPrice-'+id).value)||0;
-serviceAdminBundle(id,{profit:profit,price:price},'Связка обновлена');
+let data={coin1:document.getElementById('editCoin1-'+id).value.trim(),coin2:document.getElementById('editCoin2-'+id).value.trim(),exchange1:document.getElementById('editEx1-'+id).value.trim(),exchange2:document.getElementById('editEx2-'+id).value.trim(),profit:parseFloat(document.getElementById('editProfit-'+id).value)||0,price:parseFloat(document.getElementById('editPrice-'+id).value)||0};
+if(!data.coin1||!data.coin2){toast('Заполните валюты');return}
+serviceAdminBundle(id,data,'Связка обновлена');
 }
 
 function serviceAdminBundle(id,data,msg){
@@ -966,8 +966,9 @@ def api_admin_del_bundle(bid):
     if d.get('action') == 'delete':
         conn.execute("UPDATE bundles SET is_active=0 WHERE id=?", (bid,))
     else:
-        conn.execute("UPDATE bundles SET profit=?, price=? WHERE id=?",
-                     (float(d.get('profit', 0)), float(d.get('price', 0)), bid))
+        conn.execute("UPDATE bundles SET coin1=?, coin2=?, exchange1=?, exchange2=?, profit=?, price=? WHERE id=?",
+                     (d.get('coin1', ''), d.get('coin2', ''), d.get('exchange1', ''), d.get('exchange2', ''),
+                      float(d.get('profit', 0)), float(d.get('price', 0)), bid))
     conn.commit()
     conn.close()
     return jsonify({'ok': True})
