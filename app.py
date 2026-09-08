@@ -6,7 +6,7 @@ import threading
 import hmac
 import hashlib
 import requests
-from urllib.parse import parse_qsl
+from urllib.parse import unquote
 from flask import Flask, request, jsonify
 
 app = Flask(__name__)
@@ -578,17 +578,22 @@ def is_admin_user(uid):
 def validate_init_data(init_data):
     if not BOT_TOKEN or not init_data:
         return None
-    pairs = dict(parse_qsl(init_data))
-    if 'hash' not in pairs or 'user' not in pairs:
+    raw = {}
+    for part in init_data.split('&'):
+        if '=' not in part:
+            continue
+        k, v = part.split('=', 1)
+        raw[k] = v
+    if 'hash' not in raw or 'user' not in raw:
         return None
-    received = pairs.get('hash')
-    data_check = '\n'.join(f'{k}={v}' for k, v in sorted(pairs.items()) if k != 'hash')
+    received = raw.get('hash')
+    data_check = '\n'.join(f'{k}={v}' for k, v in sorted(raw.items()) if k != 'hash')
     secret = hmac.new(key=b'WebAppData', msg=BOT_TOKEN.encode(), digestmod=hashlib.sha256).digest()
     calc = hmac.new(key=secret, msg=data_check.encode(), digestmod=hashlib.sha256).hexdigest()
     if not hmac.compare_digest(calc, received):
         return None
     try:
-        user = json.loads(pairs['user'])
+        user = json.loads(unquote(raw['user']))
     except Exception:
         return None
     return user
